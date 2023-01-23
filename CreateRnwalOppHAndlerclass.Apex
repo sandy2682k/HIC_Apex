@@ -15,3 +15,10 @@ public class CreateRnwalOppHAndlerclass {
         }
     }
 }
+
+
+/*
+trigger CreateRenewalOpportunity on Opportunity (after insert ) {
+CreateRnwalOppHAndlerclass.createRenewalOpportunities(trigger.new);
+}
+*/
