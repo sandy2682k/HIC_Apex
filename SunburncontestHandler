@@ -1,6 +1,6 @@
 public class SunburncontestHandler {
     public static void membersforsunburncontest(List<Lead> newleadlist ) {
-        // try {
+        try {
         List<CampaignMember> campMem = new List<CampaignMember>();
         List<Task> tskList = new List<Task>(); 
         Campaign campaign = [SELECT Id FROM Campaign WHERE Name = 'Sunburn contest' LIMIT 1];  
@@ -23,11 +23,11 @@ public class SunburncontestHandler {
         } 
     }
 }
-/*       
+     
 catch (Exception CampaignMemberforsunburncontest) {
 
 System.debug(CampaignMemberforsunburncontest);
-*/
+
 *****************************************************Trigger********************************************************
 
 trigger CampaignMemberforsunburncontest on Lead (After insert) 
