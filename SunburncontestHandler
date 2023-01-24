@@ -1,0 +1,36 @@
+public class SunburncontestHandler {
+    public static void membersforsunburncontest(List<Lead> newleadlist ) {
+        // try {
+        List<CampaignMember> campMem = new List<CampaignMember>();
+        List<Task> tskList = new List<Task>(); 
+        Campaign campaign = [SELECT Id FROM Campaign WHERE Name = 'Sunburn contest' LIMIT 1];  
+        for (Lead lead : newleadlist) {
+            if (lead.Status == 'Web') {
+                CampaignMember member = new CampaignMember(LeadId=lead.Id,CampaignId=campaign.Id ,Status = 'Ticket Taken');
+                campMem.add(member);
+                
+                Task task = new Task(WhoId = lead.Id, Subject = 'Send Email', Description = 'Send email to the lead', ActivityDate = Date.today() +7, Status = 'Not Started');
+                tskList.add(task);
+            }
+        }
+        
+        if(!campMem.isEmpty())
+        {
+            insert campMem;
+        }
+        if(!tskList.isEmpty()) {
+            insert tskList;
+        } 
+    }
+}
+/*       
+catch (Exception CampaignMemberforsunburncontest) {
+
+System.debug(CampaignMemberforsunburncontest);
+*/
+*****************************************************Trigger********************************************************
+
+trigger CampaignMemberforsunburncontest on Lead (After insert) 
+{
+SunburncontestHandler.membersforsunburncontest(trigger.new);
+}
