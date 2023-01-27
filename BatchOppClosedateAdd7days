@@ -1,0 +1,16 @@
+public class BatchOppClosedateAdd7days implements Database.Batchable<sObject> {
+    public Database.QueryLocator start(Database.BatchableContext BC) {
+        return Database.getQueryLocator([SELECT Id, Name, CloseDate FROM Opportunity WHERE IsClosed = false AND StageName != 'Closed Won']);
+    }
+    public void execute(Database.BatchableContext BC, List<Opportunity> scope) {
+        List<Opportunity> opportunitiesToUpdate = new List<Opportunity>();
+        for(Opportunity opp : scope) {
+            opp.CloseDate = system.today()+7;
+            opp.Subscription_fee__c = 25;
+            opportunitiesToUpdate.add(opp);
+        }
+        update opportunitiesToUpdate;
+    }   
+    public void finish(Database.BatchableContext BC) {
+    }
+}
