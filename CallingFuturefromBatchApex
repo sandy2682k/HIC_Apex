@@ -1,0 +1,26 @@
+//Batch Apex class
+global class BatchProcessor implements Database.Batchable<SObject> {
+    global Database.QueryLocator start(Database.BatchableContext bc) {
+        return Database.getQueryLocator([SELECT Id FROM Account]);
+    }
+
+    global void execute(Database.BatchableContext bc, List<SObject> scope) {
+        List<Id> accountIds = new List<Id>();
+        for (SObject obj : scope) {
+            accountIds.add(obj.Id);
+        }
+        //Call future method
+        ProcessAccounts.processAccounts(accountIds);
+    }
+
+    global void finish(Database.BatchableContext bc) {
+    }
+}
+
+//Future method
+public class ProcessAccounts {
+    @future
+    public static void processAccounts(List<Id> accountIds) {
+        //do some processing on accounts
+    }
+}
