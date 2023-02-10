@@ -1,0 +1,30 @@
+public with sharing class InsertProfileImageHandler {
+    public static void handleInsert(List<ContentDocumentLink> cdls) {
+        List<Id> contactIds = new List<Id>();
+        id contentid;
+        Id conversionid;
+        for (ContentDocumentLink cdl : cdls) {
+            contentid =cdl.ContentDocumentId;
+            if (cdl.LinkedEntityId.getSObjectType() == Contact.SObjectType) {
+                contactIds.add(cdl.LinkedEntityId);
+            }
+        }
+        List<Contentversion> conversion = [select Id ,ContentDocumentId from Contentversion where ContentDocumentId =: contentid];
+        for(Contentversion covers : conversion) {
+            conversionid =  covers.Id;
+        }
+        if (!contactIds.isEmpty()) {
+            List<Contact> contactsToUpdate = [SELECT Id, Profile_Image__c  FROM Contact WHERE Id IN :contactIds];
+            for (Contact c : contactsToUpdate) {
+                c.Profile_Image__c  = system.URL.getSalesforceBaseUrl().toExternalForm() + '/sfc/servlet.shepherd/version/renditionDownload?rendition=THUMB720BY480&versionId=' + conversionid;
+                // https://your-community-domain-url/sfc/servlet.shepherd/version/renditionDownload?rendition=THUMB720BY480&versionId=<ContentVersionId>;
+            }
+            update contactsToUpdate;
+        }
+    }
+}
+*********************************************Trigger************************************************
+trigger InsertProfileImage on ContentDocumentLink (after insert) 
+{
+    InsertProfileImageHandler.handleInsert(Trigger.new);
+}
