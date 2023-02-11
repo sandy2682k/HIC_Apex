@@ -1,0 +1,17 @@
+//Write a trigger that will prevent adding opportunity related to one account if the amount of opportunity exceeds 100000 per day.
+public class TriggerOpportunityhandlerclass {
+    public static void preventAddingOppwith1000000perday(List<Opportunity> opplist){        
+        For(Opportunity opp:opplist) {
+            if(opp.Amount>=100000) {
+                opp.Amount.addError('Amount of opportunity exceeded 100000');
+            }
+        }
+        
+    }
+
+}
+****************************************Trigger*******************************
+trigger TriggerOpportunity on Opportunity (before insert) 
+{
+TriggerOpportunityhandlerclass.preventAddingOppwith1000000perday(Trigger.new);
+}
