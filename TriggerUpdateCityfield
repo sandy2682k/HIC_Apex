@@ -1,0 +1,28 @@
+//Write a trigger to update the city field in all the related opportunities when the city field is updated in the Account.
+public class UpdateCityFieldHandler {
+    public static void updateOpportunities(Map<Id,Account> newAccounts,Map<Id,Account> oldAccounts) {
+        
+        Set<Id> accountidsToUpdate = new Set<Id>();
+        For(Id accountId :newAccounts.keySet()) {
+            if(newAccounts.get(accountId).City__c != oldAccounts.get(accountId).City__c) {
+                accountidsToUpdate.add(accountId);
+            }            
+        }
+        if(!accountidsToUpdate.isEmpty()){
+            List<Opportunity> oppList = [Select id,Accountid,City__c From Opportunity where Accountid IN :accountidsToUpdate];
+            for(Opportunity op:oppList){
+                op.City__c = newAccounts.get(op.accountId).City__c;
+                
+            }
+            Update oppList;
+        }
+        
+    }
+}
+****************************** Trigger ****************************************
+
+trigger UpdateCityfield on Account (after update) {    
+    if(Trigger.IsAfter && Trigger.IsUpdate) {
+        UpdateCityFieldHandler.updateOpportunities(Trigger.newMap,Trigger.oldMap);
+    }
+}
