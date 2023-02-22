@@ -1,0 +1,81 @@
+public class Lead_Nationality_budgetHandler {
+    public static void leadscore(List<Lead>  newLeadValues) {
+        system.debug('checking new values of trigger '+trigger.newmap);
+        system.debug('checking old values of trigger '+trigger.oldmap);
+        Map<String,Decimal> nationalityMap = new Map<String,Decimal>();
+        Map<String,Decimal> budgetMap = new Map<String,Decimal>();
+        Map<String,Decimal> startingDateMap = new Map<String,Decimal>();
+        
+        List<Lead__c> lead_C_S_Values =Lead__c.getall().values();
+        for(Lead__c lv : lead_C_S_Values ) 
+        {
+            if(lv.Nationality__c  !=null && lv.Nationality_Score__c!=null)
+            {
+                nationalityMap.put(lv.Nationality__c,lv.Nationality_Score__c);
+            }
+            if(lv.Budget__c !=null && lv.Budget_Score__c !=null)
+            {
+                budgetMap.put(lv.Budget__c ,lv.Budget_Score__c );
+            }
+            if(lv.Starting_Date__c !=null && lv.Starting_Date_Score__c !=null) 
+            {
+                startingDateMap.put(lv.Starting_Date__c  ,lv.Starting_Date_Score__c );
+            }
+        }       
+        for(Lead ld : newLeadValues) 
+        {
+            Decimal totalScore = 0;
+            String nationality = ld.Nationality__c;
+            String budget = ld.Budget__c;
+            String startDate = ld.Starting_Date__c;
+            
+            if(nationality != null && nationalityMap.containsKey(nationality)) {
+                totalScore += nationalityMap.get(nationality) * 0.4;
+            }
+            
+            if(budget != null && budgetMap.containsKey(budget)) {
+                totalScore += budgetMap.get(budget) * 0.35;
+            }
+            
+            if(startDate != null && startingDateMap.containsKey(startDate)) {
+                totalScore += startingDateMap.get(startDate) * 0.25;
+            }
+            
+            ld.Total_Score__c = totalScore;        
+        }
+    }
+}
+
+*****************************************Trigger******************************************
+
+trigger Lead_Nationality_Trigger on Lead (before insert, before update) {
+    Lead_Nationality_budgetHandler.leadscore(Trigger.new);
+    
+    if(trigger.isbefore && Trigger.isupdate) {
+         Lead_Nationality_budgetHandler.leadscore(Trigger.new);
+        
+            
+    if(Trigger.isBefore && Trigger.isUpdate) {
+        boolean isNationalityFieldUpdated = false;
+        boolean isBudgetFieldUpdated = false;
+        boolean isStartingDateFieldUpdated = false;
+        
+        for(Lead lead : Trigger.new) {
+            Lead oldLead = Trigger.oldMap.get(lead.Id);
+            if(oldLead.Nationality__c != lead.Nationality__c) {
+                isNationalityFieldUpdated = true;
+            }
+            if(oldLead.Budget__c != lead.Budget__c) {
+                isBudgetFieldUpdated = true;
+            }
+            if(oldLead.Starting_Date__c != lead.Starting_Date__c) {
+                isStartingDateFieldUpdated = true;
+            }
+        }
+        
+        if(isNationalityFieldUpdated || isBudgetFieldUpdated || isStartingDateFieldUpdated) {
+            Lead_Nationality_budgetHandler.leadscore(Trigger.new);
+        }
+    }
+    }
+}
