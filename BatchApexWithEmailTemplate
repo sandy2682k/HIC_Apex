@@ -1,0 +1,45 @@
+global class SendEmailOnLeadStatusChange implements Database.Batchable<sObject>, Database.AllowsCallouts {
+    
+    private static final String EMAIL_TEMPLATE_ID = '00X2w000000SAOWEA4';
+    private static final String SENDER_EMAIL_ADDRESS = 'sandeep.sharma@hicglobalsolutions.com';
+    //The start method queries for lead records with status as "Ready to Convert".
+    global Database.QueryLocator start(Database.BatchableContext BC) {
+        system.debug('startmethod');
+        return Database.getQueryLocator([SELECT Id, Name, Email, Status FROM Lead WHERE Status = 'Ready for Convert' AND Email != null]);
+        
+    }
+    
+    //The execute method loops through the leads in the current batch and sends an email to each lead's email address 
+    //if the lead's status is "Ready to Convert" and their email address is not null.
+    global void execute(Database.BatchableContext BC, List<Lead> scope) {
+        try {
+            List<Messaging.SingleEmailMessage> emailsToSend = new List<Messaging.SingleEmailMessage>();
+            system.debug('execute method'+scope);
+            //EmailTemplate emailTemp = [SELECT Id, Subject, Body FROM EmailTemplate WHERE DeveloperName = 'New_template_for_lead_status_field'];
+            
+            for (Lead led : scope) {
+                system.debug('before if');
+                if (led.status == 'Ready for Convert' && led.Email != null) {
+                    system.debug('after if'+led);
+                    Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+                    email.setToAddresses(new String[] { led.Email });
+                    email.setTemplateId(EMAIL_TEMPLATE_ID);
+                    email.setTargetObjectId(led.Id);
+                    email.setSenderDisplayName('Hic Global solutions');
+                    // email.setReplyTo(SENDER_EMAIL_ADDRESS);
+                    emailsToSend.add(email);
+                    
+                }
+                
+            }
+            system.debug('email sent in execute method'+emailsToSend);
+            Messaging.sendEmail(emailsToSend);
+        } catch(Exception exceptions) {
+            System.debug('Email is not sent due to exception: ' + exceptions.getLineNumber() + ' with message ' + exceptions.getMessage());
+        }
+    }
+    
+    global void finish(Database.BatchableContext BC) {
+        
+    }
+}
