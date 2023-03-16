@@ -1,0 +1,36 @@
+//Automatically close Opportunities with a Probability Greater than 70% when the checkbox is checked on Account.
+public class TriggerHandlerclass {
+    public static void trgMethod(List<Account> accList, Map<Id, Account> oldMap) {
+        Set<Id> accIds = new Set<Id>();
+        for (Account ac : accList) {
+            if (ac.Close_Opportunities__c && oldMap.get(ac.Id).Close_Opportunities__c == false) {
+                accIds.add(ac.Id);
+            }
+        }
+        if (!accIds.isEmpty()) {
+            List<Opportunity> oppList = [
+                SELECT Id, AccountId, Stagename 
+                FROM Opportunity 
+                WHERE AccountId IN :accIds 
+                AND Stagename != 'Closed Won' 
+                AND Probability >= 70 
+                AND Account.Close_Opportunities__c = true
+            ];
+            
+            if (!oppList.isEmpty()) {
+                for (Opportunity opp : oppList) {
+                    opp.Stagename = 'Closed Won';
+                    opp.CloseDate = Date.today();
+                }
+                update oppList;
+            }
+        }
+    }
+}
+***********************************Trigger******************************
+
+trigger CheckboxTrigger on Account (After update) {
+    if(Trigger.IsAfter && Trigger.IsUpdate) {
+        TriggerHandlerclass.trgMethod(Trigger.new,Trigger.oldmap);  
+    }
+}
