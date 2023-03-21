@@ -1,0 +1,31 @@
+//Write a trigger, if the owner of an account is changed then the owner for the
+//related contacts should also be updated.
+
+trigger AccountTrigger on Account (after update) {
+if(Trigger.isUpdate){
+if(Trigger.isAfter){
+AccountTriggerHandler.updateOwnerOfRelatedContact(Trigger.
+new, Trigger.oldMap);
+}
+}
+}
+public class AccountTriggerHandler{
+public static void updateOwnerOfRelatedContact(List<Account>
+accList,Map<Id,Account>oldMap){
+List<Contact> conList= new List<Contact>();
+Map<Id,Account> accToAccountMap= new Map<Id,Account>();
+for(Account acc:accList){
+if(acc.OwnerId!=oldMap.get(acc.Id).OwnerId){
+accToAccountMap.put(acc.Id,acc);
+}
+}
+for(Contact con:[SELECT AccountId,OwnerId FROM Contact
+WHERE AccountId IN:accToAccountMap.keySet()]){
+con.OwnerId=accToAccountMap.get(con.AccountId).OwnerId;
+conList.add(con);
+}
+if(!conList.isEmpty()){
+update conList;
+}
+}
+}
