@@ -1,0 +1,78 @@
+public class ConcertEventHandlerClass {
+    public static void my_event(List<Ticket__c> tlist) {
+        Set<Id> concertIds = new Set<Id>();
+        Set<Id> contactIds = new Set<Id>();
+        Map<Id, Concert__c> concertsById = new Map<Id, Concert__c>();
+        Map<Id, Contact> contactById = new Map<Id, Contact>();
+        for (Ticket__c tc : tlist) {
+            concertIds.add(tc.Concert__c);
+            contactIds.add(tc.Customer__c);
+        }
+        for (Concert__c concert : [SELECT Id, Name, Venue__c, Date__c FROM Concert__c WHERE Id IN :concertIds]) {
+            concertsById.put(concert.Id, concert);
+        }
+        for (Contact contact : [SELECT Id, Name FROM Contact WHERE Id IN :contactIds]) {
+            contactById.put(contact.Id, contact);
+        }
+        List<Event> eventlist = new List<Event>();
+        for (Ticket__c tc : tlist) {
+            Concert__c concert = concertsById.get(tc.Concert__c);
+            Contact contact = contactById.get(tc.Customer__c);
+            if (concert != null && contact != null) {
+                Event event = new Event();
+                event.Subject = 'Music event';
+                event.Description = 'Hi ' + contact.Name + ',\n\nGreeting!\n\n' + concert.Name + ' at ' + concert.Venue__c + ' on ' + concert.Date__c + '\n\nPlease visit Happy Event\n';
+                event.Location = concert.Venue__c;
+                event.StartDateTime = System.now();
+                event.EndDateTime = event.StartDateTime.addHours(2);
+                event.WhoId = contact.Id;
+                eventlist.add(event);
+            }
+        }
+        if(!eventlist.IsEmpty()){
+              insert eventlist;
+        }
+      
+    }
+}
+
+*************************Trigger*************************************************
+
+trigger CreateEventOnTicketInsert on Ticket__c (after insert) {
+     if(trigger.isafter){
+        if(trigger.isinsert){
+        ConcertEventHandlerClass.my_event(Trigger.new);
+    }
+}
+}
+
+************************Test Class***********************************************
+
+@isTest
+private class ConcertEventHandlerClassTest {
+    @isTest static void testMyEvent() {
+        // Create test data
+        Concert__c concert = new Concert__c(Name='Test Concert', Venue__c='Test Venue', Date__c=Date.today());
+        insert concert;
+        Contact contact = new Contact(FirstName='John', LastName='Doe', Email='johndoe@test.com');
+        insert contact;
+        Ticket__c ticket = new Ticket__c(Concert__c=concert.Id, Customer__c=contact.Id);
+        insert ticket;
+        
+        // Call the event handler method
+        Test.startTest();
+        ConcertEventHandlerClass.my_event(new List<Ticket__c>{ticket});
+        Test.stopTest();
+        
+        // Verify that an event was created
+        List<Event> events = [SELECT Id, Subject, Description, Location, StartDateTime, EndDateTime, WhoId FROM Event WHERE WhoId = :contact.Id];
+        System.assertEquals(1, events.size());
+        Event event = events[0];
+        System.assertEquals('Music event', event.Subject);
+        System.assertEquals('Hi John,\n\nGreeting!\n\nTest Concert at Test Venue on ' + Date.today().format() + '\n\nPlease visit Happy Event\n', event.Description);
+        System.assertEquals('Test Venue', event.Location);
+        System.assertEquals(DateTime.now().hour(), event.StartDateTime.hour());
+        System.assertEquals(DateTime.now().hour() + 2, event.EndDateTime.hour());
+        System.assertEquals(contact.Id, event.WhoId);
+    }
+}
