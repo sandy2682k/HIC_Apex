@@ -1,5 +1,6 @@
    public class ChangeAccDescription { 
     public static void updateAccountDescription2(List<Contact> newContacts, Map<Id, Contact> oldContactsMap) {
+     if (Schema.SObjectType.Opportunity.isUpdateable()) {
         try {
             Map<Id, String> accIdVsemailDomail = new Map<Id, String>(); // Map to store Account Ids and email domains
             
@@ -31,6 +32,7 @@
             }
         } catch (Exception ex) {
             System.debug('Exception caught in updateAccountDescription: ' + ex.getMessage() + ' at line : ' + ex.getLineNumber());
+        }
         }
     }  
 }
