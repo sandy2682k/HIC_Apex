@@ -1,0 +1,45 @@
+   public class ChangeAccDescription { 
+    public static void updateAccountDescription2(List<Contact> newContacts, Map<Id, Contact> oldContactsMap) {
+        try {
+            Map<Id, String> accIdVsemailDomail = new Map<Id, String>(); // Map to store Account Ids and email domains
+            
+            for (Contact con : newContacts) { // Loop through newContacts list
+                if (con.AccountId != null && oldContactsMap.get(con.Id).AccountId != null && String.isNotBlank(con.Email)) {
+                    String oldEmailDomain = con.Email.split('@')[1]; // Extract email domain from Contact Email
+                    accIdVsemailDomail.put(oldContactsMap.get(con.Id).AccountId, oldEmailDomain); // Add Account Id and email domain to the map
+                }
+            }
+            
+            List<Account> accListToUpdate = new List<Account>(); // List to store Accounts to be updated
+            
+            // Query Accounts with Account Ids from the map, limited to 500 records (limit in Salesforce)
+            List<Account> accList = [SELECT Id, Description FROM Account WHERE Id IN: accIdVsemailDomail.keySet() LIMIT 500];
+            
+            if (!accList.isEmpty()) { // If Account list is not empty
+                for (Account acc : accList) { // Loop through the Account list
+                    // Check if Account Id is present in the map and Account Description contains the email domain
+                    if (accIdVsemailDomail.containsKey(acc.Id) && acc.Description.containsIgnoreCase(accIdVsemailDomail.get(acc.Id))) {
+                        acc.Description = acc.Description.replace(accIdVsemailDomail.get(acc.Id), ''); // Remove email domain from Account Description
+                        accListToUpdate.add(acc); // Add Account to the list to be updated
+                    } 
+                    
+                }
+            }
+            
+            if (!accListToUpdate.isEmpty()) { // If there are Accounts to be updated
+                update accListToUpdate; // Update the Account records
+            }
+        } catch (Exception ex) {
+            System.debug('Exception caught in updateAccountDescription: ' + ex.getMessage() + ' at line : ' + ex.getLineNumber());
+        }
+    }  
+}
+
+-------------------------------------------Trigger-----------------
+trigger ChangeAccDescriptionTrigger on Contact (after update) {
+     if (Trigger.isAfter && Trigger.isUpdate)
+     {
+
+            ChangeAccDescription.updateAccountDescription2(Trigger.new, Trigger.oldMap);
+        
+    }
