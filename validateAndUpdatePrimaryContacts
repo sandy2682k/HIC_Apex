@@ -1,0 +1,58 @@
+*Salesforce Scenario trigger to automatically update a field called "Primary_Contact__c" on Contact records that are related to the same Account when the field is set to true for a particular Contact in that Account.
+
+*In other words, if there is an Account with multiple Contacts, only one Contact can be marked as the primary contact. When this primary contact checkbox is checked, the "Primary_Contact__c" field will be updated to true for that Contact and false for any other Contacts related to the same Account.
+******************************Trigger_Handler_class************************
+public class CpyEmlToAccOnPrimaryConHandler {
+public static void validateAndUpdatePrimaryContacts(List<Contact> newConList) {
+  try {
+      Set<Id> accountIds = new Set<Id>();
+      List<Contact> contactsToUpdate = new List<Contact>();
+
+      // Collect all Account Ids related to the updated Contacts
+      for (Contact contact : newConList) {
+          if (contact.Primary_Contact__c == true) {
+              accountIds.add(contact.AccountId);
+          }
+      }
+
+      // Query for all Contact records related to the same Account(s)
+      Map<Id, List<Contact>> accountContactsMap = new Map<Id, List<Contact>>();
+      if (!accountIds.isEmpty()) {
+          for (Contact contact : [SELECT Id, AccountId, Primary_Contact__c FROM Contact WHERE AccountId IN :accountIds]) {
+              if (!accountContactsMap.containsKey(contact.AccountId)) {
+                  accountContactsMap.put(contact.AccountId, new List<Contact>());
+              }
+              accountContactsMap.get(contact.AccountId).add(contact);
+          }
+      }
+
+      // Update the Primary_Contact__c field on related Contacts
+      for (Contact contact : newConList) {
+          if (contact.Primary_Contact__c == true && accountContactsMap.containsKey(contact.AccountId)) {
+              for (Contact relatedContact : accountContactsMap.get(contact.AccountId)) {
+                  if (relatedContact.Id != contact.Id && relatedContact.Primary_Contact__c == true) {
+                      relatedContact.Primary_Contact__c = false;
+                      contactsToUpdate.add(relatedContact);
+                  }
+              }
+          }
+      }
+
+      if (!contactsToUpdate.isEmpty()) {
+          update contactsToUpdate;
+      }
+  } catch (Exception e) {
+      System.debug('An error occurred in validateAndUpdatePrimaryContacts method: ' + e.getMessage());
+  }
+}
+}
+*******************Trigger***********
+
+trigger CpyEmlToAccOnPrimaryConTrigger on Contact (before insert,before update) {
+  if(Trigger.Isbefore && Trigger.IsInsert){
+      CpyEmlToAccOnPrimaryConHandler.validateAndUpdatePrimaryContacts(Trigger.new);
+  }
+
+if(Trigger.Isbefore && Trigger.Isupdate){
+       CpyEmlToAccOnPrimaryConHandler.validateAndUpdatePrimaryContacts(Trigger.new);
+  }
