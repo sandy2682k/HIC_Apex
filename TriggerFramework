@@ -1,0 +1,168 @@
+************ NewBusinessTriggerHandler ************************
+
+public class NewBusinessTriggerHandler {
+    private Map<Id, Opportunity> oldMap; // Map to store old Opportunity records
+    private Map<Id, Opportunity> newMap; // Map to store new Opportunity records
+
+    // Constructor to initialize oldMap and newMap
+    public NewBusinessTriggerHandler(Map<Id, Opportunity> oldMap, Map<Id, Opportunity> newMap) {
+        this.oldMap = oldMap;
+        this.newMap = newMap;
+    }
+
+    // Method to handle logic after Opportunity records are updated
+    public void onAfterUpdate() {
+        Newbusinessrecordupdate(newMap.values(), oldMap);
+    }
+
+    // Method to process Opportunity records and create related records
+    public void Newbusinessrecordupdate(List<Opportunity> newlist, Map<Id, Opportunity> oldmap) {
+        if (Schema.SObjectType.Opportunity.isUpdateable()) {
+            try {
+                String OppNewBusinessRt = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('New Business').getRecordTypeId();
+                String OppRenewalRt = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('Renewal').getRecordTypeId();
+
+                List<Opportunity> updateopp = new List<Opportunity>();
+                Map<Id, Opportunity> renewalOpps = new Map<Id, Opportunity>();
+
+                for (Opportunity renewalupdateobj : newlist) {
+                    if (renewalupdateobj.StageName != oldmap.get(renewalupdateobj.id).StageName && renewalupdateobj.RecordTypeId == OppNewBusinessRt && renewalupdateobj.StageName == 'Closed Won') {
+                        Opportunity obj = renewalupdateobj.clone();
+                        obj.RecordTypeId = OppRenewalRt;
+                        obj.StageName = 'Renewal';
+                        obj.Name = renewalupdateobj.Name + '-Renewal';
+                        obj.CloseDate = renewalupdateobj.CloseDate.addDays(30);
+                        obj.Parent_Opportunity__c = renewalupdateobj.Id;
+                        updateopp.add(obj);
+                        renewalOpps.put(renewalupdateobj.Id, obj);
+                    }
+                }
+
+                system.debug('Number of Opportunities to be inserted: ' + updateopp.size());
+
+                if (!updateopp.isEmpty()) {
+                    // Use database.insert to insert Opportunity records
+                    database.insert(updateopp);
+                }
+
+                // Query for related Quotes outside of the loop
+                List<Quote> relatedQuotes = [SELECT Id, OpportunityId, Name, (SELECT Id, PricebookEntryId, Quantity, UnitPrice, Product2Id FROM QuoteLineItems) FROM Quote WHERE OpportunityId IN :renewalOpps.keySet() AND Primary_Quote__c = true LIMIT 4999];
+
+                system.debug('Number of related Quotes fetched: ' + relatedQuotes.size());
+
+                Map<Id, List<QuoteLineItem>> quoteToLineItemsMap = new Map<Id, List<QuoteLineItem>>();
+                for (Quote q : relatedQuotes) {
+                    quoteToLineItemsMap.put(q.Id, q.QuoteLineItems);
+                }
+
+                List<Quote> clonedQuotes = new List<Quote>();
+                for (Quote q : relatedQuotes) {
+                    Quote clonedQuote = q.clone();
+                    clonedQuote.OpportunityId = renewalOpps.get(q.OpportunityId).Id;
+                    clonedQuote.Name = q.Name; // Set Name for the cloned Quote
+                    clonedQuotes.add(clonedQuote);
+                }
+
+                system.debug('Number of Quotes to be inserted: ' + clonedQuotes.size());
+
+                if (!clonedQuotes.isEmpty()) {
+                    // Use database.insert to insert Quote records
+                    database.insert(clonedQuotes);
+
+                    // Clone and insert the QuoteLineItems
+                    List<QuoteLineItem> clonedQuoteLineItems = new List<QuoteLineItem>();
+
+                    for (Quote cq : clonedQuotes) {
+                        List<QuoteLineItem> originalLineItems = quoteToLineItemsMap.get(cq.Id);
+
+                        if (originalLineItems != null) {
+                            for (QuoteLineItem qli : originalLineItems) {
+                                QuoteLineItem clonedQli = qli.clone();
+                                // Set required fields for the cloned QuoteLineItem
+                                clonedQli.QuoteId = cq.Id; // Set the QuoteId to the Id of the newly inserted cloned Quote
+                                clonedQli.PricebookEntryId = qli.PricebookEntryId;
+                                clonedQli.Quantity = qli.Quantity;
+                                clonedQli.UnitPrice = qli.UnitPrice;
+                                clonedQli.Product2Id = qli.Product2Id;
+
+                                clonedQuoteLineItems.add(clonedQli);
+                            }
+                        }
+                    }
+
+                    system.debug('Number of QuoteLineItems to be inserted: ' + clonedQuoteLineItems.size());
+
+                    if (!clonedQuoteLineItems.isEmpty()) {
+                        // Use database.insert to insert QuoteLineItem records
+                        database.insert(clonedQuoteLineItems);
+                    }
+                }
+            } catch (Exception ex) {
+                system.debug('Error Occurred: ' + ex.getMessage());
+            }
+        }
+    }
+}
+
+************ NewBusinessTrigger ************************
+
+trigger NewBusinessTrigger on Opportunity (after update) {
+    NewBusinessTriggerHandler handler = new NewBusinessTriggerHandler(Trigger.oldMap, Trigger.newMap);
+    handler.onAfterUpdate();
+}
+
+************ TestNewBusinessTriggerHandler ************************
+
+@isTest
+public class TestNewBusinessTriggerHandler {
+    @isTest static void testNewbusinessrecordupdate() {
+        // Prepare test data
+        String OppNewBusinessRt = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('New Business').getRecordTypeId();
+        String OppRenewalRt = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('Renewal').getRecordTypeId();
+
+        // Get Id of standardPriceBook
+        Id pb = Test.getStandardPricebookId();
+
+        // Create a Product2 record
+        Product2 prod = new Product2(Name='Test Product', IsActive=true);
+        insert prod;
+
+        // Create a PricebookEntry in the standard price book
+        PricebookEntry pbe = new PricebookEntry(Pricebook2Id=pb, Product2Id=prod.Id, UnitPrice=100, IsActive=true);
+        insert pbe;
+
+        // Create a new Opportunity
+        Opportunity opp = new Opportunity(Name='Test Opp', StageName='Prospecting', CloseDate=System.today().addDays(10), RecordTypeId=OppNewBusinessRt);
+        insert opp;
+
+        // Create a Quote for the Opportunity and assign it to the standard price book
+        Quote q = new Quote(Name='Test Quote', OpportunityId=opp.Id, Pricebook2Id=pb, Primary_Quote__c=true);
+        insert q;
+
+        // Create a QuoteLineItem for the Quote
+        QuoteLineItem qli = new QuoteLineItem(QuoteId=q.Id, PricebookEntryId=pbe.Id, Quantity=1, UnitPrice=100);
+        insert qli;
+
+        // Update the Opportunity to trigger the method
+        opp.StageName = 'Closed Won';
+        update opp;
+
+        // Query for the new Opportunity and related records
+        List<Opportunity> opps = [SELECT Id, Name, StageName, RecordTypeId, (SELECT Id FROM Quotes), Parent_Opportunity__c FROM Opportunity WHERE Parent_Opportunity__c = :opp.Id];
+        
+        // Assertions to verify the results
+        System.assertEquals(1, opps.size(), 'Expected one new Opportunity to be created');
+        
+        Opportunity newOpp = opps[0];
+        
+        System.assertEquals('Test Opp-Renewal', newOpp.Name, 'Expected the new Opportunity name to be "Test Opp-Renewal"');
+        System.assertEquals(OppRenewalRt, newOpp.RecordTypeId, 'Expected the new Opportunity RecordTypeId to be OppRenewalRt');
+        System.assertEquals('Renewal', newOpp.StageName, 'Expected the new Opportunity StageName to be "Renewal"');
+        
+        // Query for related Quotes outside of the loop
+        List<Quote> relatedQuotes = [SELECT Id, OpportunityId, Name FROM Quote WHERE OpportunityId = :newOpp.Id];
+        
+        System.assertEquals(1, relatedQuotes.size(), 'Expected one new Quote to be created');
+        
+    }
+}
