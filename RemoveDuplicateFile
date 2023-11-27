@@ -1,0 +1,81 @@
+// Query all ContentVersion records
+List<ContentVersion> cvList = [SELECT Id, Title, ContentDocumentId FROM ContentVersion Limit 49999];
+System.debug('Queried ContentVersion records: ' + cvList.size());
+
+// Create a map to hold titles and corresponding records
+Map<String, List<ContentVersion>> titleToCVMap = new Map<String, List<ContentVersion>>();
+
+// List to hold records to be deleted
+List<Id> recordsToDelete = new List<Id>();
+
+// Counter for merged records
+Integer mergedCount = 0;
+
+for(ContentVersion cv : cvList) {
+    // Null check
+    if(cv != null && cv.Title != null) {
+        // If the title is already in the map, add the record to the delete list
+        if(titleToCVMap.containsKey(cv.Title)) {
+            titleToCVMap.get(cv.Title).add(cv);
+        } else {
+            // If the title is not in the map, add it
+            titleToCVMap.put(cv.Title, new List<ContentVersion>{cv});
+        }
+    }
+}
+System.debug('Title to ContentVersion map: ' + titleToCVMap);
+
+// Fetch LinkedEntityId using ContentVersion title from ContentDocumentLink
+Map<String, List<Id>> titleToLinkedEntityIdMap = new Map<String, List<Id>>();
+List<Id> contentDocumentIds = new List<Id>();
+for(List<ContentVersion> cvListInMap : titleToCVMap.values()) {
+    for(ContentVersion cv : cvListInMap) {
+        contentDocumentIds.add(cv.ContentDocumentId);
+    }
+}
+
+List<ContentDocumentLink> cdlList = [SELECT ContentDocument.Title, LinkedEntityId FROM ContentDocumentLink WHERE ContentDocumentId IN :contentDocumentIds];
+for(ContentDocumentLink cdl : cdlList) {
+    String linkedEntityIdStr = String.valueOf(cdl.LinkedEntityId);
+    if(linkedEntityIdStr.startsWith('a1U')) {
+        // Debug LinkedEntityId before deleting
+        System.debug('LinkedEntityId of record to delete: ' + cdl.LinkedEntityId);
+        if(titleToLinkedEntityIdMap.containsKey(cdl.ContentDocument.Title)) {
+            // If the LinkedEntityId is the same, then it's a duplicate
+            if(titleToLinkedEntityIdMap.get(cdl.ContentDocument.Title).contains(cdl.LinkedEntityId)) {
+                titleToLinkedEntityIdMap.get(cdl.ContentDocument.Title).add(cdl.LinkedEntityId);
+            }
+        } else {
+            titleToLinkedEntityIdMap.put(cdl.ContentDocument.Title, new List<Id>{cdl.LinkedEntityId});
+        }
+    }
+}
+System.debug('Title to LinkedEntityId map after removing non-duplicates: ' + titleToLinkedEntityIdMap);
+
+// Now remove the first record from each list in the map and add the rest to the delete list
+for(String title : titleToCVMap.keySet()) {
+    List<ContentVersion> cvListInMap = titleToCVMap.get(title);
+    List<Id> linkedEntityIds = titleToLinkedEntityIdMap.get(title);
+    if(cvListInMap.size() > 1 && linkedEntityIds.size() > 1) {
+        cvListInMap.remove(0);
+        for(ContentVersion cv : cvListInMap) {
+            recordsToDelete.add(cv.ContentDocumentId);
+            mergedCount++;
+        }
+    }
+}
+System.debug('Records to delete: ' + recordsToDelete);
+
+// Delete duplicate records using Database.delete for better error handling
+Database.DeleteResult[] results = Database.delete(recordsToDelete, false);
+
+// Check results for any errors
+for(Database.DeleteResult dr : results) {
+    if (!dr.isSuccess()) {
+        System.debug('Failed to delete record ID: ' + dr.getId());
+        System.debug('Error: ' + dr.getErrors());
+    }
+}
+
+// Output the number of merged records
+System.debug('Number of merged ContentVersion records: ' + mergedCount);
